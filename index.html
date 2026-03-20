@@ -913,24 +913,24 @@ function renderEstoqueDashboard() {
     const pctVendido = estInicial > 0 ? Math.round((qtdVendida / estInicial) * 100) : 0;
     const barClass   = sobra === 0 ? "critical" : sobra <= estInicial * 0.2 ? "low" : "";
 
-    return \`
+    return `
       <div class="estoque-row">
         <div>
-          <div class="estoque-nome">\${p.nome}</div>
-          <div class="mini-bar-bg"><div class="mini-bar-fill \${barClass}" style="width:\${pctVendido}%"></div></div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">\${pctVendido}% vendido</div>
+          <div class="estoque-nome">${p.nome}</div>
+          <div class="mini-bar-bg"><div class="mini-bar-fill ${barClass}" style="width:${pctVendido}%"></div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${pctVendido}% vendido</div>
         </div>
         <div class="estoque-nums">
           <div class="estoque-num">
-            <div class="estoque-num-val" style="color:var(--green)">\${qtdVendida}</div>
+            <div class="estoque-num-val" style="color:var(--green)">${qtdVendida}</div>
             <div class="estoque-num-lbl">Vendido</div>
           </div>
           <div class="estoque-num">
-            <div class="estoque-num-val" style="color:\${sobra === 0 ? 'var(--red)' : sobra <= estInicial * 0.2 ? 'var(--amber)' : 'var(--muted2)'}">\${sobra}</div>
+            <div class="estoque-num-val" style="color:${sobra === 0 ? 'var(--red)' : sobra <= estInicial * 0.2 ? 'var(--amber)' : 'var(--muted2)'}">${sobra}</div>
             <div class="estoque-num-lbl">Sobra</div>
           </div>
         </div>
-      </div>\`;
+      </div>`;
   }).join("");
 }
 
@@ -949,14 +949,14 @@ function renderHistoricoDashboard() {
 
   hist.innerHTML = Object.entries(porMes).reverse().map(([mes, total]) => {
     const { comissao, pct } = calcularComissao(total);
-    return \`
+    return `
       <div class="hist-item">
-        <div class="hist-mes">\${mes}</div>
+        <div class="hist-mes">${mes}</div>
         <div class="hist-vals">
-          <div class="hist-total">\${brl(total)}</div>
-          <div class="hist-comissao">Comissão: \${brl(comissao)} (\${(pct*100).toFixed(0)}%)</div>
+          <div class="hist-total">${brl(total)}</div>
+          <div class="hist-comissao">Comissão: ${brl(comissao)} (${(pct*100).toFixed(0)}%)</div>
         </div>
-      </div>\`;
+      </div>`;
   }).join("");
 }
 
@@ -968,15 +968,15 @@ function renderEstoqueConfig() {
     list.innerHTML = '<p style="color:var(--muted);font-size:13px">Cadastre produtos primeiro.</p>';
     return;
   }
-  list.innerHTML = state.products.map(p => \`
+  list.innerHTML = state.products.map(p => `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-      <span style="flex:1;font-size:14px;font-weight:500">\${p.nome}</span>
+      <span style="flex:1;font-size:14px;font-weight:500">${p.nome}</span>
       <input type="number" inputmode="numeric" min="0"
         style="width:80px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:15px;padding:8px 10px;outline:none;text-align:center;-webkit-appearance:none;"
-        value="\${state.estoque[p.nome] || 0}"
-        onchange="salvarEstoque('\${p.nome}', this.value)">
+        value="${state.estoque[p.nome] || 0}"
+        onchange="salvarEstoque('${p.nome}', this.value)">
       <span style="font-size:12px;color:var(--muted)">un.</span>
-    </div>\`).join("");
+    </div>`).join("");
 }
 
 function salvarEstoque(produto, valor) {
