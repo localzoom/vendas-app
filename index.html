@@ -1,0 +1,244 @@
+// ============================================================
+//  RECEPTOR DE DADOS — App Vendas → Google Sheets
+//  Cole este código no Apps Script da sua planilha
+// ============================================================
+
+// ⚙️ NOMES DAS ABAS — ajuste se as suas tiverem nomes diferentes
+const ABA_VENDAS   = "Vendas";    // onde ficam os itens vendidos
+const ABA_CLIENTES = "Clientes";  // cadastro dos militares
+const ABA_COBRANCA = "Cobranças"; // resumo mensal por cliente
+
+// ============================================================
+//  RECEBE OS DADOS DO APP (chamada POST)
+// ============================================================
+function doPost(e) {
+  try {
+    const dados = JSON.parse(e.postData.contents);
+    const vendas = dados.vendas || [];
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    garantirAbas(ss);
+
+    vendas.forEach(item => {
+      if (item.tipo === "venda")  registrarVenda(ss, item);
+      if (item.tipo === "status") atualizarStatus(ss, item);
+      if (item.tipo === "cliente") cadastrarCliente(ss, item);
+    });
+
+    recalcularCobrancas(ss);
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, erro: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================================
+//  GARANTE QUE AS ABAS EXISTEM COM OS CABEÇALHOS CORRETOS
+// ============================================================
+function garantirAbas(ss) {
+  // Aba: Vendas
+  let abaVendas = ss.getSheetByName(ABA_VENDAS);
+  if (!abaVendas) {
+    abaVendas = ss.insertSheet(ABA_VENDAS);
+    abaVendas.appendRow([
+      "ID Cliente", "Graduação", "Nome de Guerra", "Telefone",
+      "Produto", "Qtd", "Preço Unit.", "Subtotal", "Data/Hora"
+    ]);
+    abaVendas.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#f3f4f6");
+  }
+
+  // Aba: Clientes
+  let abaClientes = ss.getSheetByName(ABA_CLIENTES);
+  if (!abaClientes) {
+    abaClientes = ss.insertSheet(ABA_CLIENTES);
+    abaClientes.appendRow([
+      "ID", "Graduação", "Nome de Guerra", "Telefone", "Status", "Cadastrado em"
+    ]);
+    abaClientes.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#f3f4f6");
+  }
+
+  // Aba: Cobranças
+  let abaCobranca = ss.getSheetByName(ABA_COBRANCA);
+  if (!abaCobranca) {
+    abaCobranca = ss.insertSheet(ABA_COBRANCA);
+    abaCobranca.appendRow([
+      "ID Cliente", "Graduação", "Nome de Guerra", "Telefone",
+      "Total do Mês", "Status", "Última Atualização"
+    ]);
+    abaCobranca.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#f3f4f6");
+  }
+}
+
+// ============================================================
+//  REGISTRA UMA VENDA NA ABA "VENDAS"
+// ============================================================
+function registrarVenda(ss, item) {
+  const aba = ss.getSheetByName(ABA_VENDAS);
+
+  // Verifica se já existe essa venda pelo timestamp (evita duplicatas)
+  const dados = aba.getDataRange().getValues();
+  const jaExiste = dados.some(row => row[8] === item.ts);
+  if (jaExiste) return;
+
+  const subtotal = (item.qtd || 0) * (item.preco || 0);
+
+  aba.appendRow([
+    item.id          || "",
+    item.graduacao   || "",
+    item.nomeGuerra  || "",
+    item.telefone    || "",
+    item.produto     || "",
+    item.qtd         || 0,
+    item.preco       || 0,
+    subtotal,
+    item.ts          || new Date().toISOString()
+  ]);
+
+  // Garante que o cliente está cadastrado
+  garantirCliente(ss, item);
+}
+
+// ============================================================
+//  ATUALIZA STATUS DO CLIENTE (PAGO / FIADO)
+// ============================================================
+function atualizarStatus(ss, item) {
+  const abaClientes  = ss.getSheetByName(ABA_CLIENTES);
+  const abaCobranca  = ss.getSheetByName(ABA_COBRANCA);
+
+  // Atualiza na aba Clientes
+  atualizarCelulaPorId(abaClientes, item.id, 5, item.status); // coluna E = Status
+
+  // Atualiza na aba Cobranças
+  atualizarCelulaPorId(abaCobranca, item.id, 6, item.status); // coluna F = Status
+  atualizarCelulaPorId(abaCobranca, item.id, 7, new Date().toLocaleString("pt-BR")); // col G = Última atualização
+}
+
+// ============================================================
+//  CADASTRA UM NOVO CLIENTE (se vier tipo "cliente" explícito)
+// ============================================================
+function cadastrarCliente(ss, item) {
+  garantirCliente(ss, item);
+}
+
+// ============================================================
+//  GARANTE QUE O CLIENTE EXISTE NA ABA CLIENTES
+// ============================================================
+function garantirCliente(ss, item) {
+  if (!item.id) return;
+  const aba   = ss.getSheetByName(ABA_CLIENTES);
+  const dados = aba.getDataRange().getValues();
+
+  // Verifica se o ID já existe
+  const existe = dados.some(row => row[0] === item.id);
+  if (existe) return;
+
+  aba.appendRow([
+    item.id,
+    item.graduacao  || "",
+    item.nomeGuerra || "",
+    item.telefone   || "",
+    item.status     || "FIADO",
+    new Date().toLocaleString("pt-BR")
+  ]);
+}
+
+// ============================================================
+//  RECALCULA A ABA COBRANÇAS COM O TOTAL ATUAL DE CADA CLIENTE
+// ============================================================
+function recalcularCobrancas(ss) {
+  const abaVendas   = ss.getSheetByName(ABA_VENDAS);
+  const abaClientes = ss.getSheetByName(ABA_CLIENTES);
+  const abaCobranca = ss.getSheetByName(ABA_COBRANCA);
+
+  const vendas   = abaVendas.getDataRange().getValues().slice(1);   // sem cabeçalho
+  const clientes = abaClientes.getDataRange().getValues().slice(1);
+
+  // Soma total por ID de cliente
+  const totais = {};
+  vendas.forEach(row => {
+    const id       = row[0];
+    const subtotal = parseFloat(row[7]) || 0;
+    totais[id] = (totais[id] || 0) + subtotal;
+  });
+
+  // Pega status atual de cada cliente
+  const statusMap = {};
+  clientes.forEach(row => { statusMap[row[0]] = row[4]; });
+
+  // Limpa aba cobranças (mantém cabeçalho)
+  const ultimaLinha = abaCobranca.getLastRow();
+  if (ultimaLinha > 1) {
+    abaCobranca.getRange(2, 1, ultimaLinha - 1, 7).clearContent();
+  }
+
+  // Reescreve com dados atualizados
+  clientes.forEach(row => {
+    const id = row[0];
+    if (!id) return;
+
+    const total  = totais[id] || 0;
+    const status = statusMap[id] || "FIADO";
+
+    abaCobranca.appendRow([
+      id,
+      row[1], // graduação
+      row[2], // nome de guerra
+      row[3], // telefone
+      total,
+      status,
+      new Date().toLocaleString("pt-BR")
+    ]);
+  });
+
+  // Formata coluna Total como moeda
+  const linhas = abaCobranca.getLastRow();
+  if (linhas > 1) {
+    abaCobranca.getRange(2, 5, linhas - 1, 1)
+      .setNumberFormat("R$ #,##0.00");
+  }
+}
+
+// ============================================================
+//  HELPER — Atualiza uma célula de uma linha pelo ID (col A)
+// ============================================================
+function atualizarCelulaPorId(aba, id, coluna, valor) {
+  const dados = aba.getDataRange().getValues();
+  for (let i = 1; i < dados.length; i++) {
+    if (dados[i][0] === id) {
+      aba.getRange(i + 1, coluna).setValue(valor);
+      return;
+    }
+  }
+}
+
+// ============================================================
+//  TESTE MANUAL — rode esta função para verificar se está ok
+// ============================================================
+function testarScript() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  garantirAbas(ss);
+
+  // Simula uma venda de teste
+  registrarVenda(ss, {
+    tipo:       "venda",
+    id:         "teste123",
+    graduacao:  "CABO",
+    nomeGuerra: "SILVA",
+    telefone:   "11999999999",
+    produto:    "Produto Teste",
+    preco:      10.00,
+    qtd:        2,
+    ts:         new Date().toISOString()
+  });
+
+  recalcularCobrancas(ss);
+
+  SpreadsheetApp.getUi().alert("✅ Teste concluído! Verifique as abas Vendas, Clientes e Cobranças.");
+}
