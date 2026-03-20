@@ -632,8 +632,12 @@ async function syncNow(){
   document.getElementById("syncLabel").textContent="Enviando...";
   btn.classList.add("syncing"); dot.className="sync-dot syncing";
   try{
-    const res = await fetch(state.sheetsUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({vendas:state.pending})});
-    if(!res.ok) throw new Error();
+    await fetch(state.sheetsUrl, {
+      method: "POST",
+      mode: "no-cors",
+      headers: {"Content-Type": "text/plain"},
+      body: JSON.stringify({vendas: state.pending})
+    });
     state.pending=[]; save(); renderPendingBadge();
     showToast("Sincronizado com sucesso!","success");
   }catch{ showToast("Falha ao sincronizar. Tente novamente.","error"); }
