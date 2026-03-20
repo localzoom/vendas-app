@@ -17,7 +17,8 @@
     --text:#f0f0f5; --muted:#6b7280; --muted2:#9ca3af;
     --radius:16px; --radius-sm:10px;
   }
-  html,body { height:100%; background:var(--bg); font-family:'DM Sans',sans-serif; color:var(--text); overflow:hidden; }
+  html { height:100%; background:var(--bg); }
+  body { height:100%; background:var(--bg); font-family:'DM Sans',sans-serif; color:var(--text); overflow:hidden; -webkit-overflow-scrolling:touch; }
 
   /* HEADER */
   .header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid var(--border); background:var(--bg); z-index:10; }
@@ -34,7 +35,9 @@
   @keyframes fadeIn { from{opacity:0}to{opacity:1} }
 
   /* SCREENS */
-  .screen { display:none; flex-direction:column; height:calc(100vh - 57px); overflow-y:auto; padding:20px; }
+  .screen { display:none; flex-direction:column; height:calc(100vh - 57px); overflow-y:auto; padding:20px; -webkit-overflow-scrolling:touch; }
+  .screen.active { pointer-events:auto; }
+  .screen:not(.active) { pointer-events:none; }
   .screen.active { display:flex; animation:fadeIn .2s ease; }
 
   /* BUSCA */
@@ -989,37 +992,56 @@ init();
 async function carregarClientesDaPlanilha() {
   if(!state.sheetsUrl) return;
   if(!navigator.onLine) return;
-  try {
-    const res  = await fetch(state.sheetsUrl, { method:"GET" });
-    const data = await res.json();
-    if(!data.ok || !data.clientes) return;
 
-    // Mescla: planilha é a fonte da verdade, mas mantém pendentes locais
-    const clientesPlanilha = data.clientes;
-    const idsPlanilha = Object.keys(clientesPlanilha);
+  showToast("Atualizando clientes...", "");
 
-    // Atualiza/adiciona clientes vindos da planilha
-    idsPlanilha.forEach(id => {
-      const remoto = clientesPlanilha[id];
-      const local  = state.clients[id];
-      // Se existe local com pendentes, mantém os itens locais até sincronizar
-      if(local && state.pending.some(p => p.id === id)) {
-        state.clients[id] = { ...remoto, itens: local.itens };
-      } else {
-        state.clients[id] = remoto;
+  return new Promise((resolve) => {
+    // Usa JSONP para contornar CORS do Apps Script
+    const cbName = "gsCallback_" + Date.now();
+    const url = state.sheetsUrl + "?callback=" + cbName;
+
+    window[cbName] = function(data) {
+      try {
+        if(data && data.ok && data.clientes) {
+          const clientesPlanilha = data.clientes;
+          Object.keys(clientesPlanilha).forEach(id => {
+            const remoto = clientesPlanilha[id];
+            const local  = state.clients[id];
+            if(local && state.pending.some(p => p.id === id)) {
+              state.clients[id] = { ...remoto, itens: local.itens };
+            } else {
+              state.clients[id] = remoto;
+            }
+          });
+          save();
+          const input = document.getElementById("searchInput");
+          if(input && input.value.length >= 3) onSearch(input.value);
+          showToast("Clientes atualizados!", "success");
+        }
+      } catch(e) { console.log("Erro callback:", e); }
+      delete window[cbName];
+      document.getElementById(cbName) && document.getElementById(cbName).remove();
+      resolve();
+    };
+
+    const script = document.createElement("script");
+    script.id = cbName;
+    script.src = url;
+    script.onerror = () => {
+      delete window[cbName];
+      script.remove();
+      showToast("Erro ao carregar clientes", "error");
+      resolve();
+    };
+    setTimeout(() => {
+      if(window[cbName]) {
+        delete window[cbName];
+        script.remove();
+        resolve();
       }
-    });
-
-    save();
-
-    // Atualiza a tela se estiver na busca
-    const input = document.getElementById("searchInput");
-    if(input && input.value.length >= 3) onSearch(input.value);
-
-    showToast("Clientes atualizados", "success");
-  } catch(err) {
-    console.log("Erro ao carregar clientes:", err);
-  }
+    }, 8000);
+    document.head.appendChild(script);
+  });
 }
 
 // Carrega ao abrir se tiver URL configurada
