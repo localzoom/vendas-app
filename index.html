@@ -166,6 +166,55 @@
   .nav-item.active { color:var(--accent); }
   .nav-icon { font-size:22px; }
 
+
+  /* DASHBOARD */
+  .dash-greeting { font-size:22px; font-weight:600; letter-spacing:-0.5px; margin-bottom:4px; }
+  .dash-sub { font-size:13px; color:var(--muted2); margin-bottom:24px; }
+  .metrics-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+  .metric-card { background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius); padding:16px; }
+  .metric-label { font-size:11px; font-weight:600; letter-spacing:1px; color:var(--muted); text-transform:uppercase; margin-bottom:8px; }
+  .metric-value { font-size:24px; font-weight:600; letter-spacing:-0.5px; }
+  .metric-value.green { color:var(--green); }
+  .metric-value.amber { color:var(--amber); }
+  .metric-value.accent { color:var(--accent); }
+  .metric-value.red { color:var(--red); }
+  .metric-sub { font-size:12px; color:var(--muted2); margin-top:4px; }
+
+  /* COMISSÃO */
+  .comissao-card { background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius); padding:18px; margin-bottom:20px; }
+  .comissao-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+  .comissao-title { font-size:13px; font-weight:600; color:var(--muted2); letter-spacing:.8px; text-transform:uppercase; }
+  .comissao-valor { font-size:32px; font-weight:600; color:var(--green); letter-spacing:-1px; }
+  .comissao-pct { font-size:13px; color:var(--muted2); margin-top:2px; }
+  .progress-wrap { margin-bottom:8px; }
+  .progress-bar-bg { background:var(--surface2); border-radius:20px; height:8px; overflow:hidden; }
+  .progress-bar-fill { height:100%; border-radius:20px; background:linear-gradient(90deg,#4f7cff,#22c55e); transition:width .6s cubic-bezier(.34,1.56,.64,1); }
+  .progress-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:5px; }
+  .faixa-atual { display:inline-flex; align-items:center; gap:6px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.25); color:#4ade80; font-size:12px; font-weight:600; padding:4px 10px; border-radius:20px; margin-top:10px; }
+  .proxima-faixa { font-size:12px; color:var(--muted2); margin-top:6px; }
+
+  /* ESTOQUE */
+  .estoque-card { background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius); padding:18px; margin-bottom:20px; }
+  .estoque-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+  .estoque-row:last-child { border-bottom:none; }
+  .estoque-nome { font-size:14px; font-weight:500; }
+  .estoque-nums { display:flex; gap:16px; align-items:center; }
+  .estoque-num { text-align:center; }
+  .estoque-num-val { font-size:16px; font-weight:600; font-family:'DM Mono',monospace; }
+  .estoque-num-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .mini-bar-bg { background:var(--surface2); border-radius:4px; height:4px; width:80px; overflow:hidden; margin-top:8px; }
+  .mini-bar-fill { height:100%; border-radius:4px; background:var(--accent); transition:width .5s ease; }
+  .mini-bar-fill.low { background:var(--amber); }
+  .mini-bar-fill.critical { background:var(--red); }
+
+  /* HISTORICO */
+  .hist-item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+  .hist-item:last-child { border-bottom:none; }
+  .hist-mes { font-size:13px; font-weight:500; }
+  .hist-vals { text-align:right; }
+  .hist-total { font-size:14px; font-weight:600; font-family:'DM Mono',monospace; color:var(--green); }
+  .hist-comissao { font-size:11px; color:var(--muted2); }
+
   body { padding-bottom:60px; }
   .divider { border:none; border-top:1px solid var(--border); margin:14px 0; }
   .empty-state { text-align:center; padding:40px 20px; color:var(--muted2); }
@@ -197,7 +246,7 @@
         oninput="onSearch(this.value)">
       <span class="search-icon">🔍</span>
     </div>
-    <p class="search-hint">Digite pelo menos 3 caracteres para buscar</p>
+    <p class="search-hint">Digite pelo menos 3 caracteres para buscar &nbsp;&middot;&nbsp; <span style="color:var(--accent);cursor:pointer" onclick="carregarClientesDaPlanilha()">&#8635; Atualizar lista</span></p>
     <div id="searchResults"></div>
   </div>
 
@@ -226,14 +275,84 @@
     <p class="sheets-url-hint">Cole a URL gerada ao publicar o Apps Script como "Web App".</p>
   </div>
   <div class="config-section">
+    <div class="section-label">Estoque inicial por produto</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Informe quantas unidades você recebeu de cada produto.</p>
+    <div id="estoqueConfigList"></div>
+  </div>
+  <div class="config-section">
     <div class="section-label">Dados locais</div>
     <button class="btn btn-danger" onclick="clearAllData()">Apagar todos os dados locais</button>
   </div>
 </div>
 
+
+<!-- SCREEN: DASHBOARD -->
+<div class="screen" id="screenDashboard">
+  <p class="dash-greeting">Olá, Vendedor! 🎖️</p>
+  <p class="dash-sub" id="dashMes">Carregando métricas...</p>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Total vendido</div>
+      <div class="metric-value green" id="dashTotalVendido">R$ 0</div>
+      <div class="metric-sub" id="dashTotalClientes">0 clientes</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">A receber</div>
+      <div class="metric-value amber" id="dashAReceber">R$ 0</div>
+      <div class="metric-sub" id="dashQtdFiado">0 em aberto</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Já pagaram</div>
+      <div class="metric-value accent" id="dashPagos">0</div>
+      <div class="metric-sub">clientes pagos</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Inadimplentes</div>
+      <div class="metric-value red" id="dashInadimplentes">0</div>
+      <div class="metric-sub">ainda em aberto</div>
+    </div>
+  </div>
+
+  <!-- COMISSÃO -->
+  <div class="comissao-card">
+    <div class="comissao-header">
+      <div>
+        <div class="comissao-title">Sua comissão</div>
+        <div class="comissao-valor" id="dashComissaoValor">R$ 0,00</div>
+        <div class="comissao-pct" id="dashComissaoPct">Faixa atual: 0%</div>
+      </div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="dashProgressBar" style="width:0%"></div>
+      </div>
+      <div class="progress-labels">
+        <span id="dashProgressMin">R$ 0</span>
+        <span id="dashProgressMax">R$ 200</span>
+      </div>
+    </div>
+    <div class="faixa-atual" id="dashFaixaAtual">▲ Faixa 0%</div>
+    <div class="proxima-faixa" id="dashProximaFaixa"></div>
+  </div>
+
+  <!-- ESTOQUE -->
+  <div class="section-label">Estoque por produto</div>
+  <div class="estoque-card" id="dashEstoqueList">
+    <p style="color:var(--muted);font-size:13px">Configure o estoque inicial na aba Config.</p>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="section-label" style="margin-top:8px">Histórico de meses</div>
+  <div class="estoque-card" id="dashHistorico">
+    <p style="color:var(--muted);font-size:13px">Nenhum histórico ainda.</p>
+  </div>
+</div>
+
 <nav class="nav">
   <div class="nav-item active" id="navVendas" onclick="showScreen('Vendas')"><span class="nav-icon">🛒</span><span>Venda</span></div>
-  <div class="nav-item" id="navPendentes" onclick="showScreen('Pendentes')"><span class="nav-icon">🔄</span><span>Pendentes</span></div>
+  <div class="nav-item" id="navDashboard" onclick="showScreen('Dashboard')"><span class="nav-icon">📊</span><span>Dashboard</span></div>
+  <div class="nav-item" id="navPendentes" onclick="showScreen('Pendentes')"><span class="nav-icon">🔄</span><span>Sync</span></div>
   <div class="nav-item" id="navConfig" onclick="showScreen('Config')"><span class="nav-icon">⚙️</span><span>Config</span></div>
 </nav>
 
@@ -344,7 +463,7 @@
 <script>
 const GRAD_CLASS = {"RECRUTA":"recruta","SOLDADO EP":"soldado","CABO":"cabo","SARGENTO":"sargento","SUB-TENENTE":"subtenente"};
 
-let state = { clients:{}, products:[], pending:[], sheetsUrl:"" };
+let state = { clients:{}, products:[], pending:[], sheetsUrl:"", estoque:{}, historico:[] };
 let currentClientId = null;
 let selectedProduct = null, selectedQty = 1;
 let selectedGradValue = "", selectedStatusValue = "FIADO";
@@ -374,7 +493,8 @@ function showScreen(name){
   document.getElementById("screen"+name).classList.add("active");
   document.getElementById("nav"+name).classList.add("active");
   if(name==="Pendentes") renderPendingList();
-  if(name==="Config") renderProductConfig();
+  if(name==="Config") { renderProductConfig(); renderEstoqueConfig(); }
+  if(name==="Dashboard") renderDashboard();
 }
 
 // ── BUSCA ──
@@ -688,8 +808,222 @@ function showToast(msg,type=""){
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2800);
 }
 
+
+// ── TABELA DE COMISSÃO ──
+const FAIXAS_COMISSAO = [
+  { min: 0,    max: 199,   pct: 0    },
+  { min: 200,  max: 499,   pct: 0.04 },
+  { min: 500,  max: 999,   pct: 0.06 },
+  { min: 1000, max: 1499,  pct: 0.08 },
+  { min: 1500, max: 1999,  pct: 0.10 },
+  { min: 2000, max: 2999,  pct: 0.12 },
+  { min: 3000, max: 3499,  pct: 0.15 },
+  { min: 3500, max: 3999,  pct: 0.16 },
+  { min: 4000, max: Infinity, pct: 0.18 }
+];
+
+function calcularComissao(totalVendido) {
+  const faixa = [...FAIXAS_COMISSAO].reverse().find(f => totalVendido >= f.min) || FAIXAS_COMISSAO[0];
+  return { comissao: totalVendido * faixa.pct, pct: faixa.pct, faixa };
+}
+
+function proximaFaixa(totalVendido) {
+  return FAIXAS_COMISSAO.find(f => f.min > totalVendido) || null;
+}
+
+function brl(v) {
+  return Number(v).toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+}
+
+// ── RENDERIZA DASHBOARD ──
+function renderDashboard() {
+  const clientes = Object.values(state.clients);
+  const mes = new Date().toLocaleString("pt-BR", { month:"long", year:"numeric" });
+  document.getElementById("dashMes").textContent = "Resumo de " + mes;
+
+  // Totais
+  let totalVendido = 0, totalAberto = 0, qtdPagos = 0, qtdFiado = 0;
+  clientes.forEach(c => {
+    const total = c.itens.reduce((s,i) => s + i.qtd * i.preco, 0);
+    totalVendido += total;
+    if (c.status === "PAGO") { qtdPagos++; }
+    else { totalAberto += total; qtdFiado++; }
+  });
+
+  document.getElementById("dashTotalVendido").textContent = brl(totalVendido);
+  document.getElementById("dashTotalClientes").textContent = clientes.length + " clientes";
+  document.getElementById("dashAReceber").textContent = brl(totalAberto);
+  document.getElementById("dashQtdFiado").textContent = qtdFiado + " em aberto";
+  document.getElementById("dashPagos").textContent = qtdPagos;
+  document.getElementById("dashInadimplentes").textContent = qtdFiado;
+
+  // Comissão
+  const { comissao, pct, faixa } = calcularComissao(totalVendido);
+  document.getElementById("dashComissaoValor").textContent = brl(comissao);
+  document.getElementById("dashComissaoPct").textContent = "Faixa atual: " + (pct * 100).toFixed(0) + "% sobre " + brl(totalVendido);
+  document.getElementById("dashFaixaAtual").textContent = "▲ Faixa " + (pct * 100).toFixed(0) + "%";
+
+  // Barra de progresso para próxima faixa
+  const prox = proximaFaixa(totalVendido);
+  if (prox) {
+    const range  = prox.min - faixa.min;
+    const atual  = totalVendido - faixa.min;
+    const pctBar = Math.min(100, Math.round((atual / range) * 100));
+    document.getElementById("dashProgressBar").style.width = pctBar + "%";
+    document.getElementById("dashProgressMin").textContent = brl(faixa.min);
+    document.getElementById("dashProgressMax").textContent = brl(prox.min);
+    const faltam = prox.min - totalVendido;
+    document.getElementById("dashProximaFaixa").textContent = "Faltam " + brl(faltam) + " para a faixa de " + (prox.pct * 100).toFixed(0) + "% (" + brl(prox.min) + ")";
+  } else {
+    document.getElementById("dashProgressBar").style.width = "100%";
+    document.getElementById("dashProgressMin").textContent = brl(4000);
+    document.getElementById("dashProgressMax").textContent = "Máximo";
+    document.getElementById("dashProximaFaixa").textContent = "🏆 Você atingiu a faixa máxima de 18%!";
+  }
+
+  // Estoque
+  renderEstoqueDashboard(totalVendido);
+
+  // Histórico
+  renderHistoricoDashboard();
+}
+
+function renderEstoqueDashboard() {
+  const list = document.getElementById("dashEstoqueList");
+  if (!state.products.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum produto cadastrado.</p>';
+    return;
+  }
+
+  // Soma unidades vendidas por produto
+  const vendidos = {};
+  Object.values(state.clients).forEach(c => {
+    c.itens.forEach(item => {
+      vendidos[item.produto] = (vendidos[item.produto] || 0) + item.qtd;
+    });
+  });
+
+  list.innerHTML = state.products.map(p => {
+    const estInicial = state.estoque[p.nome] || 0;
+    const qtdVendida = vendidos[p.nome] || 0;
+    const sobra      = Math.max(0, estInicial - qtdVendida);
+    const pctVendido = estInicial > 0 ? Math.round((qtdVendida / estInicial) * 100) : 0;
+    const barClass   = sobra === 0 ? "critical" : sobra <= estInicial * 0.2 ? "low" : "";
+
+    return \`
+      <div class="estoque-row">
+        <div>
+          <div class="estoque-nome">\${p.nome}</div>
+          <div class="mini-bar-bg"><div class="mini-bar-fill \${barClass}" style="width:\${pctVendido}%"></div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">\${pctVendido}% vendido</div>
+        </div>
+        <div class="estoque-nums">
+          <div class="estoque-num">
+            <div class="estoque-num-val" style="color:var(--green)">\${qtdVendida}</div>
+            <div class="estoque-num-lbl">Vendido</div>
+          </div>
+          <div class="estoque-num">
+            <div class="estoque-num-val" style="color:\${sobra === 0 ? 'var(--red)' : sobra <= estInicial * 0.2 ? 'var(--amber)' : 'var(--muted2)'}">\${sobra}</div>
+            <div class="estoque-num-lbl">Sobra</div>
+          </div>
+        </div>
+      </div>\`;
+  }).join("");
+}
+
+function renderHistoricoDashboard() {
+  const hist = document.getElementById("dashHistorico");
+  if (!state.historico || !state.historico.length) {
+    hist.innerHTML = '<p style="color:var(--muted);font-size:13px">Nenhum histórico ainda. O histórico é gerado quando um cliente paga.</p>';
+    return;
+  }
+
+  // Agrupa por mês
+  const porMes = {};
+  state.historico.forEach(h => {
+    porMes[h.mes] = (porMes[h.mes] || 0) + h.valor;
+  });
+
+  hist.innerHTML = Object.entries(porMes).reverse().map(([mes, total]) => {
+    const { comissao, pct } = calcularComissao(total);
+    return \`
+      <div class="hist-item">
+        <div class="hist-mes">\${mes}</div>
+        <div class="hist-vals">
+          <div class="hist-total">\${brl(total)}</div>
+          <div class="hist-comissao">Comissão: \${brl(comissao)} (\${(pct*100).toFixed(0)}%)</div>
+        </div>
+      </div>\`;
+  }).join("");
+}
+
+// ── ESTOQUE CONFIG ──
+function renderEstoqueConfig() {
+  const list = document.getElementById("estoqueConfigList");
+  if (!list) return;
+  if (!state.products.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px">Cadastre produtos primeiro.</p>';
+    return;
+  }
+  list.innerHTML = state.products.map(p => \`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <span style="flex:1;font-size:14px;font-weight:500">\${p.nome}</span>
+      <input type="number" inputmode="numeric" min="0"
+        style="width:80px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text);font-size:15px;padding:8px 10px;outline:none;text-align:center;-webkit-appearance:none;"
+        value="\${state.estoque[p.nome] || 0}"
+        onchange="salvarEstoque('\${p.nome}', this.value)">
+      <span style="font-size:12px;color:var(--muted)">un.</span>
+    </div>\`).join("");
+}
+
+function salvarEstoque(produto, valor) {
+  if (!state.estoque) state.estoque = {};
+  state.estoque[produto] = parseInt(valor) || 0;
+  save();
+}
+
 window.addEventListener("online",()=>{ if(state.pending.length) syncNow(); });
 init();
+
+// ── CARREGA CLIENTES DA PLANILHA AO ABRIR ──
+async function carregarClientesDaPlanilha() {
+  if(!state.sheetsUrl) return;
+  if(!navigator.onLine) return;
+  try {
+    const res  = await fetch(state.sheetsUrl, { method:"GET" });
+    const data = await res.json();
+    if(!data.ok || !data.clientes) return;
+
+    // Mescla: planilha é a fonte da verdade, mas mantém pendentes locais
+    const clientesPlanilha = data.clientes;
+    const idsPlanilha = Object.keys(clientesPlanilha);
+
+    // Atualiza/adiciona clientes vindos da planilha
+    idsPlanilha.forEach(id => {
+      const remoto = clientesPlanilha[id];
+      const local  = state.clients[id];
+      // Se existe local com pendentes, mantém os itens locais até sincronizar
+      if(local && state.pending.some(p => p.id === id)) {
+        state.clients[id] = { ...remoto, itens: local.itens };
+      } else {
+        state.clients[id] = remoto;
+      }
+    });
+
+    save();
+
+    // Atualiza a tela se estiver na busca
+    const input = document.getElementById("searchInput");
+    if(input && input.value.length >= 3) onSearch(input.value);
+
+    showToast("Clientes atualizados", "success");
+  } catch(err) {
+    console.log("Erro ao carregar clientes:", err);
+  }
+}
+
+// Carrega ao abrir se tiver URL configurada
+setTimeout(() => carregarClientesDaPlanilha(), 1000);
 </script>
 </body>
 </html>
