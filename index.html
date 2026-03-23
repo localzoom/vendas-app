@@ -291,10 +291,10 @@ html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;colo
     <div style="position:relative">
       <input class="text-input" id="consultaTel" type="tel" inputmode="numeric"
         placeholder="DDD + número" maxlength="11"
+        oninput="consultarClienteAoDigitar(this.value)"
         onkeydown="if(event.key==='Enter')consultarCliente()"
         style="font-family:'DM Mono',monospace;font-size:20px;letter-spacing:2px;padding:18px 20px">
     </div>
-    <button class="btn btn-primary" style="margin-top:12px" onclick="consultarCliente()">Consultar</button>
     <div id="consultaResultado"></div>
   </div>
 </div>
@@ -516,7 +516,7 @@ var FAIXAS = [
 var state = {
   clients:{}, products:[], pending:[], sheetsUrl:"",
   estoque:{}, historico:[],
-  vendedores:[], // [{id, nome, user, senha}]
+  vendedores:[],
   senhaDono:"fabinho123", userDono:"admin"
 };
 
@@ -525,6 +525,7 @@ var currentClientId = null;
 var selectedProduct = null, selectedQty = 1;
 var selectedGradValue = "", selectedStatusValue = "FIADO";
 var selectedGradEditValue = "", selectedStatusEditValue = "";
+var consultaTimer = null;
 
 // ══════════════════════════════════════════
 //  INIT
@@ -536,7 +537,6 @@ function init() {
     state.products = [{nome:"Produto A",preco:10},{nome:"Produto B",preco:25},{nome:"Produto C",preco:15.5}];
     save();
   }
-  // Verifica se há sessão ativa
   var sessaoSalva = sessionStorage.getItem("sessao_ativa");
   if(sessaoSalva) {
     sessao = JSON.parse(sessaoSalva);
@@ -545,7 +545,6 @@ function init() {
 }
 
 function save() { localStorage.setItem("vendas_v3", JSON.stringify(state)); }
-
 function saveSessao() { sessionStorage.setItem("sessao_ativa", JSON.stringify(sessao)); }
 
 // ══════════════════════════════════════════
@@ -557,7 +556,7 @@ function mostrarTela(id) {
     if(el) el.style.display = "none";
   });
   var alvo = document.getElementById(id);
-  if(alvo) alvo.style.display = id === "appPrincipal" ? "flex" : "flex";
+  if(alvo) alvo.style.display = "flex";
 }
 
 function irParaLogin(perfil) {
@@ -623,11 +622,8 @@ function entrarNoApp() {
   tag.textContent = sessao.perfil === "dono" ? "Dono" : sessao.vendedorNome;
   tag.className = "perfil-tag " + sessao.perfil;
 
-  // Mostra nav correto
   document.getElementById("navDono").style.display = sessao.perfil === "dono" ? "flex" : "none";
   document.getElementById("navVendedor").style.display = sessao.perfil === "vendedor" ? "flex" : "none";
-
-  // Mostra/oculta aba gestão
   document.getElementById("screenDono").style.display = sessao.perfil === "dono" ? "" : "none";
 
   document.getElementById("sheetsUrl").value = state.sheetsUrl || "";
@@ -644,29 +640,85 @@ function fazerLogout() {
 }
 
 // ══════════════════════════════════════════
-//  CONSULTA CLIENTE
+//  CONSULTA CLIENTE — BUSCA LOCAL (com fallback remoto)
 // ══════════════════════════════════════════
-function consultarCliente() {
-  var tel = document.getElementById("consultaTel").value.replace(/\D/g,"");
+function consultarClienteAoDigitar(val) {
+  clearTimeout(consultaTimer);
+  var tel = val.replace(/\D/g,"");
   var res = document.getElementById("consultaResultado");
 
-  if(tel.length < 10) { showToast("Digite um número válido","error"); return; }
-
-  // Busca na planilha via JSONP
-  if(!state.sheetsUrl) {
-    res.innerHTML = '<p style="color:var(--muted2);text-align:center;margin-top:20px;font-size:14px">Sistema não configurado. Tente mais tarde.</p>';
+  if(tel.length < 10) {
+    res.innerHTML = "";
     return;
   }
 
-  res.innerHTML = '<p style="color:var(--muted2);text-align:center;margin-top:20px;font-size:14px">Buscando...</p>';
+  // Primeiro tenta local imediatamente
+  var cliente = buscarClienteLocal(tel);
+  if(cliente) {
+    renderConsultaCard(cliente, res);
+    return;
+  }
 
+  // Se não achou local e tem URL, tenta remoto após pequeno delay
+  if(state.sheetsUrl) {
+    res.innerHTML = '<p style="color:var(--muted2);text-align:center;margin-top:20px;font-size:14px">Buscando...</p>';
+    consultaTimer = setTimeout(function(){ buscarClienteRemoto(tel, res); }, 600);
+  } else {
+    res.innerHTML = '<p style="color:var(--muted2);text-align:center;margin-top:20px;font-size:14px">Número não encontrado.</p>';
+  }
+}
+
+function consultarCliente() {
+  var tel = document.getElementById("consultaTel").value.replace(/\D/g,"");
+  var res = document.getElementById("consultaResultado");
+  if(tel.length < 10) { showToast("Digite um número válido","error"); return; }
+  consultarClienteAoDigitar(document.getElementById("consultaTel").value);
+}
+
+function buscarClienteLocal(tel) {
+  return Object.values(state.clients).find(function(c) {
+    return (c.telefone||"").replace(/\D/g,"") === tel;
+  }) || null;
+}
+
+function renderConsultaCard(cliente, res) {
+  var total = (cliente.itens||[]).reduce(function(s,i){ return s + i.qtd * i.preco; }, 0);
+  var gc = GRAD_CLASS[cliente.graduacao] || "cabo";
+  var isPago = cliente.status === "PAGO";
+
+  var itensHtml = "";
+  (cliente.itens||[]).forEach(function(item) {
+    itensHtml += '<div class="consulta-item">' +
+      '<div><div style="font-size:14px;font-weight:500">' + item.produto + '</div>' +
+      '<div style="font-size:12px;color:var(--muted2)">' + item.qtd + 'x &times; R$ ' + item.preco.toFixed(2).replace(".",",") + '</div></div>' +
+      '<div style="font-size:14px;font-weight:500;font-family:\'DM Mono\',monospace">R$ ' + (item.qtd*item.preco).toFixed(2).replace(".",",") + '</div>' +
+      '</div>';
+  });
+
+  res.innerHTML =
+    '<div class="consulta-card">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+        '<span class="grad-badge ' + gc + '">' + cliente.graduacao + '</span>' +
+      '</div>' +
+      '<div class="consulta-nome">' + cliente.graduacao + ' ' + cliente.nomeGuerra + '</div>' +
+      (isPago
+        ? '<div class="consulta-total" style="color:var(--green)">R$ 0,00</div><div class="consulta-status-pago">✅ Pagamento confirmado!</div>'
+        : (total > 0
+            ? '<div class="consulta-total">R$ ' + total.toFixed(2).replace(".",",") + '</div><div style="font-size:13px;color:var(--muted2);margin-bottom:16px">Valor total em aberto</div>'
+            : '<div class="consulta-total" style="color:var(--green)">R$ 0,00</div><div class="consulta-status-pago">✅ Sem débitos em aberto!</div>'
+          )
+      ) +
+      (itensHtml ? '<div style="margin-top:16px"><div class="section-label">Itens</div>' + itensHtml + '</div>' : '') +
+    '</div>';
+}
+
+function buscarClienteRemoto(tel, res) {
   var cbName = "gsConsulta_" + Date.now();
   var url = state.sheetsUrl + "?callback=" + cbName;
 
   window[cbName] = function(data) {
     delete window[cbName];
-    var script = document.getElementById(cbName);
-    if(script) script.remove();
+    var sc = document.getElementById(cbName); if(sc) sc.remove();
 
     if(!data || !data.ok) {
       res.innerHTML = '<p style="color:var(--red);text-align:center;margin-top:20px">Erro ao buscar dados.</p>';
@@ -683,42 +735,19 @@ function consultarCliente() {
       return;
     }
 
-    var total = (cliente.itens||[]).reduce(function(s,i){ return s + i.qtd * i.preco; }, 0);
-    var gc = GRAD_CLASS[cliente.graduacao] || "cabo";
-    var isPago = cliente.status === "PAGO";
-
-    var itensHtml = "";
-    (cliente.itens||[]).forEach(function(item) {
-      itensHtml += '<div class="consulta-item">' +
-        '<div><div style="font-size:14px;font-weight:500">' + item.produto + '</div>' +
-        '<div style="font-size:12px;color:var(--muted2)">' + item.qtd + 'x &times; R$ ' + item.preco.toFixed(2).replace(".",",") + '</div></div>' +
-        '<div style="font-size:14px;font-weight:500;font-family:\'DM Mono\',monospace">R$ ' + (item.qtd*item.preco).toFixed(2).replace(".",",") + '</div>' +
-        '</div>';
-    });
-
-    res.innerHTML = '<div class="consulta-card">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-        '<span class="grad-badge ' + gc + '">' + cliente.graduacao + '</span>' +
-      '</div>' +
-      '<div class="consulta-nome">' + cliente.graduacao + ' ' + cliente.nomeGuerra + '</div>' +
-      (isPago
-        ? '<div class="consulta-total" style="color:var(--green)">R$ 0,00</div><div class="consulta-status-pago">✅ Pagamento confirmado!</div>'
-        : '<div class="consulta-total">R$ ' + total.toFixed(2).replace(".",",") + '</div><div style="font-size:13px;color:var(--muted2);margin-bottom:16px">Valor total em aberto</div>'
-      ) +
-      (itensHtml ? '<div style="margin-top:16px"><div class="section-label">Itens</div>' + itensHtml + '</div>' : '') +
-      '</div>';
+    // Salva localmente para próximas consultas
+    if(cliente.id) state.clients[cliente.id] = cliente;
+    save();
+    renderConsultaCard(cliente, res);
   };
 
   var script = document.createElement("script");
-  script.id = cbName;
-  script.src = url;
+  script.id = cbName; script.src = url;
   script.onerror = function() {
     delete window[cbName]; script.remove();
     res.innerHTML = '<p style="color:var(--red);text-align:center;margin-top:20px">Erro de conexão.</p>';
   };
-  setTimeout(function(){
-    if(window[cbName]){ delete window[cbName]; script.remove(); }
-  }, 8000);
+  setTimeout(function(){ if(window[cbName]){ delete window[cbName]; script.remove(); } }, 8000);
   document.head.appendChild(script);
 }
 
@@ -727,8 +756,7 @@ function consultarCliente() {
 // ══════════════════════════════════════════
 function showScreen(name, perfil) {
   document.querySelectorAll(".screen").forEach(function(s){ s.classList.remove("active"); });
-  var allNavItems = document.querySelectorAll(".nav-item");
-  allNavItems.forEach(function(n){ n.classList.remove("active"); });
+  document.querySelectorAll(".nav-item").forEach(function(n){ n.classList.remove("active"); });
 
   var tela = document.getElementById("screen" + name);
   if(tela) tela.classList.add("active");
@@ -989,7 +1017,6 @@ function renderDashboard() {
     proxLabel = "Você atingiu a faixa máxima de 18%!";
   }
 
-  // Estoque
   var vendidos = {};
   clientes.forEach(function(c){ c.itens.forEach(function(item){ vendidos[item.produto]=(vendidos[item.produto]||0)+item.qtd; }); });
 
@@ -1009,7 +1036,6 @@ function renderDashboard() {
       '</div></div>';
   }).join("") || '<p style="color:var(--muted);font-size:13px">Nenhum produto cadastrado.</p>';
 
-  // Histórico
   var histHtml = '<p style="color:var(--muted);font-size:13px">Nenhum histórico ainda.</p>';
   if(state.historico && state.historico.length) {
     var porMes = {};
@@ -1066,7 +1092,6 @@ function renderPainelDono() {
       }).join("")
     : '<p style="color:var(--muted);font-size:13px">Nenhum vendedor cadastrado.</p>';
 
-  // Estoque total
   var vendidos = {};
   clientes.forEach(function(c){ c.itens.forEach(function(item){ vendidos[item.produto]=(vendidos[item.produto]||0)+item.qtd; }); });
   var estoqueHtml = state.products.map(function(p) {
@@ -1271,7 +1296,6 @@ function showToast(msg, type) {
 }
 window.addEventListener("online", function(){ if(state.pending.length) syncNow(); });
 
-// Inicializa
 init();
 </script>
 </body>
